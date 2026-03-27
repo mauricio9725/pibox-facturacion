@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: pibox-facturacion
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: CH_HOST
+        sync: false
+      - key: CH_PORT
+        value: "8443"
+      - key: CH_USER
+        sync: false
+      - key: CH_PASSWORD
+        sync: false
+      - key: CH_DATABASE
+        sync: false

@@ -1,0 +1,18 @@
+# Credenciales y datos sensibles
+.env
+users.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Streamlit — incluir config.toml pero excluir secrets
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
