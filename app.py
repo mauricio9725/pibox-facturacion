@@ -747,8 +747,9 @@ def _page_login() -> None:
     _, col, _ = st.columns([1, 1.6, 1])
     with col:
         import os as _os
-        _logo = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "logo.png")
-        if _os.path.exists(_logo):
+        _base = _os.path.dirname(_os.path.abspath(__file__))
+        _logo = next((_os.path.join(_base, f) for f in ["logo.png", "logo.jpeg", "logo.png.jpeg", "logo.jpg"] if _os.path.exists(_os.path.join(_base, f))), "")
+        if _logo:
             _, lc, _ = st.columns([1, 2, 1])
             with lc:
                 st.image(_logo, width=180)
@@ -798,8 +799,9 @@ def _render_sidebar() -> str:
         rol_label = {"admin": "Administrador", "operaciones": "Operaciones", "cliente": "Cliente"}.get(rol, rol)
 
         import os as _os
-        _logo = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "logo.png")
-        if _os.path.exists(_logo):
+        _base = _os.path.dirname(_os.path.abspath(__file__))
+        _logo = next((_os.path.join(_base, f) for f in ["logo.png", "logo.jpeg", "logo.png.jpeg", "logo.jpg"] if _os.path.exists(_os.path.join(_base, f))), "")
+        if _logo:
             st.image(_logo, width=130)
         st.markdown(f"""
         <div style="text-align:center;padding:0.3rem 0 0.5rem">
