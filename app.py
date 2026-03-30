@@ -441,17 +441,43 @@ def _gh_save(data: dict) -> bool:
         logger.warning(f"GitHub save error: {e}")
         return False
 
+def _merge_extra_users(data: dict) -> dict:
+    """Agrega usuarios de st.secrets[extra_users] si no existen ya."""
+    try:
+        extra = st.secrets.get("extra_users", {})
+        if not extra:
+            return data
+        usernames = {u["username"] for u in data.get("usuarios", [])}
+        changed = False
+        for uname, udata in extra.items():
+            if uname not in usernames:
+                raw_pw = udata.get("password", "Pibox2024!")
+                data["usuarios"].append({
+                    "username": uname,
+                    "password_hash": bcrypt.hashpw(raw_pw.encode(), bcrypt.gensalt()).decode(),
+                    "nombre_completo": udata.get("nombre_completo", uname),
+                    "rol": udata.get("rol", "operaciones"),
+                    "activo": True,
+                    "debe_cambiar_password": True,
+                })
+                changed = True
+        if changed:
+            _save_raw(data)
+    except Exception:
+        pass
+    return data
+
 def _load_raw() -> dict:
     gh = _gh_load()
     if gh:
-        return gh
+        return _merge_extra_users(gh)
     if not os.path.exists(USERS_FILE):
         data = _default_users()
         _save_raw(data)
         logger.info("users.json creado con usuario admin por defecto")
         return data
     with open(USERS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        return _merge_extra_users(json.load(f))
 
 def _save_raw(data: dict) -> None:
     _gh_save(data)
