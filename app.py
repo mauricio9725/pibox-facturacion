@@ -464,15 +464,21 @@ def load_companies() -> pd.DataFrame:
         st.error(f"❌ Error conectando a ClickHouse: {exc}")
         return pd.DataFrame(columns=["Nombre_Compania", "Company_ID", "NIT"])
 
+def _sanitize(val: str) -> str:
+    """Permite solo caracteres seguros para valores en queries."""
+    safe_chars = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_. @")
+    return "".join(c for c in str(val) if c in safe_chars)
+
 def query_data(search_mode: str, search_value, fi: date, ff: date):
     try:
         if search_mode == "nit":
-            where = f"NIT = '{search_value}'"
+            safe_nit = _sanitize(search_value)
+            where = f"NIT = '{safe_nit}'"
         elif isinstance(search_value, list):
-            ids = ", ".join(f"'{v}'" for v in search_value)
+            ids = ", ".join(f"'{_sanitize(v)}'" for v in search_value)
             where = f"Company_ID IN ({ids})"
         else:
-            where = f"Company_ID = '{search_value}'"
+            where = f"Company_ID = '{_sanitize(search_value)}'"
         sql = (
             f"SELECT * FROM picapmongoprod.reporte_facturacion "
             f"WHERE {where} AND Fecha_VERDADERA BETWEEN '{fi}' AND '{ff}'"
@@ -740,23 +746,14 @@ def _fmt_cop(value: float) -> str:
 def _page_login() -> None:
     _, col, _ = st.columns([1, 1.6, 1])
     with col:
+        import os as _os
+        _logo = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "logo.png")
+        if _os.path.exists(_logo):
+            _, lc, _ = st.columns([1, 2, 1])
+            with lc:
+                st.image(_logo, width=180)
         st.markdown("""
         <div class="login-wrapper">
-            <div class="login-illustration">
-                <svg width="110" height="70" viewBox="0 0 110 70" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <circle cx="22" cy="54" r="13" stroke="#6B21A8" stroke-width="3"/>
-                  <circle cx="22" cy="54" r="5"  fill="#A855F7"/>
-                  <circle cx="88" cy="54" r="13" stroke="#6B21A8" stroke-width="3"/>
-                  <circle cx="88" cy="54" r="5"  fill="#A855F7"/>
-                  <path d="M22 41 L40 20 L70 20 L86 41" stroke="#6B21A8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M40 20 L48 41 L72 41" fill="#F3E8FF" stroke="#A855F7" stroke-width="1.5"/>
-                  <circle cx="36" cy="28" r="5" fill="#6B21A8"/>
-                  <rect x="54" y="10" width="18" height="12" rx="3" fill="#A855F7" opacity="0.7"/>
-                  <line x1="63" y1="10" x2="63" y2="4"  stroke="#6B21A8" stroke-width="2"/>
-                  <line x1="58" y1="4"  x2="68" y2="4"  stroke="#6B21A8" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </div>
-            <div class="login-logo">pibox</div>
             <div class="login-sub">Portal de Prefacturación</div>
         </div>
         """, unsafe_allow_html=True)
@@ -800,9 +797,12 @@ def _render_sidebar() -> str:
         rol = st.session_state.get("rol", "cliente")
         rol_label = {"admin": "Administrador", "operaciones": "Operaciones", "cliente": "Cliente"}.get(rol, rol)
 
+        import os as _os
+        _logo = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "logo.png")
+        if _os.path.exists(_logo):
+            st.image(_logo, width=130)
         st.markdown(f"""
-        <div style="text-align:center;padding:1.2rem 0 0.5rem">
-            <div style="font-size:2.5rem;font-weight:800;color:white;letter-spacing:-1px">pibox</div>
+        <div style="text-align:center;padding:0.3rem 0 0.5rem">
             <div style="color:rgba(255,255,255,0.85);font-size:0.95rem;font-weight:600;margin-top:2px">
                 {st.session_state.get("user_display", "")}
             </div>
