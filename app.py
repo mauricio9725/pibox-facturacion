@@ -744,17 +744,25 @@ def _fmt_cop(value: float) -> str:
 # PÁGINAS
 # ─────────────────────────────────────────────
 def _page_login() -> None:
-    import os as _os
+    import os as _os, base64 as _b64
     _base = _os.path.dirname(_os.path.abspath(__file__))
     _logo = next((_os.path.join(_base, f) for f in ["logo.png", "logo.jpeg", "logo.png.jpeg", "logo.jpg"] if _os.path.exists(_os.path.join(_base, f))), "")
 
-    st.markdown("<div style='margin-top:6vh'></div>", unsafe_allow_html=True)
-    _, col, _ = st.columns([1, 1.2, 1])
+    st.markdown("<div style='margin-top:8vh'></div>", unsafe_allow_html=True)
+    _, col, _ = st.columns([1, 1, 1])
     with col:
         if _logo:
-            st.image(_logo, width=160)
+            with open(_logo, "rb") as _f:
+                _enc = _b64.b64encode(_f.read()).decode()
+            _ext = "jpeg" if _logo.endswith((".jpeg", ".jpg", ".png.jpeg")) else "png"
+            st.markdown(
+                f"<div style='text-align:center;margin-bottom:0.5rem'>"
+                f"<img src='data:image/{_ext};base64,{_enc}' style='width:140px;max-width:100%;image-rendering:auto'/>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         st.markdown(
-            "<p style='text-align:center;color:#6B7280;font-size:1rem;margin:0.2rem 0 1.4rem'>Portal de Prefacturación</p>",
+            "<p style='text-align:center;color:#6B7280;font-size:1rem;margin:0 0 1.4rem'>Portal de Prefacturación</p>",
             unsafe_allow_html=True,
         )
         with st.form("login_form"):
@@ -797,13 +805,19 @@ def _render_sidebar() -> str:
         rol = st.session_state.get("rol", "cliente")
         rol_label = {"admin": "Administrador", "operaciones": "Operaciones", "cliente": "Cliente"}.get(rol, rol)
 
-        import os as _os
+        import os as _os, base64 as _b64
         _base = _os.path.dirname(_os.path.abspath(__file__))
         _logo = next((_os.path.join(_base, f) for f in ["logo.png", "logo.jpeg", "logo.png.jpeg", "logo.jpg"] if _os.path.exists(_os.path.join(_base, f))), "")
         if _logo:
-            _, sc, _ = st.columns([1, 3, 1])
-            with sc:
-                st.image(_logo, use_container_width=True)
+            with open(_logo, "rb") as _f:
+                _enc = _b64.b64encode(_f.read()).decode()
+            _ext = "jpeg" if _logo.endswith((".jpeg", ".jpg", ".png.jpeg")) else "png"
+            st.markdown(
+                f"<div style='text-align:center;padding:0.8rem 0 0.2rem'>"
+                f"<img src='data:image/{_ext};base64,{_enc}' style='width:110px;max-width:80%;image-rendering:auto'/>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         st.markdown(f"""
         <div style="text-align:center;padding:0.3rem 0 0.5rem">
             <div style="color:rgba(255,255,255,0.85);font-size:0.95rem;font-weight:600;margin-top:2px">
@@ -885,6 +899,17 @@ def _render_filters():
     with col4:
         st.write(""); st.write("")
         consultar = st.button("🔍 Consultar", use_container_width=True, type="primary")
+
+    # Nombre personalizado — visible cuando hay selección
+    if empresa_display:
+        nombre_custom = st.text_input(
+            "📝 Nombre del archivo y Excel",
+            value=empresa_display,
+            placeholder="Ej: Cruz Verde",
+            help="Este nombre se usará en el archivo exportado y como título dentro del Excel",
+        )
+        if nombre_custom.strip():
+            empresa_display = nombre_custom.strip()
 
     return empresa_display, search_mode, search_value, fi, ff, consultar
 
@@ -1045,23 +1070,13 @@ def _page_module(title: str, generator_fn, file_prefix: str, modulo_key: str) ->
         # KPIs
         _render_metrics(df_cached, fi_c, ff_c)
 
-        # Nombre personalizado del archivo
-        col_name, col_dl, col_info = st.columns([2, 2, 3])
-        with col_name:
-            custom_name = st.text_input(
-                "Nombre del archivo",
-                value=st.session_state.get(f"{file_prefix}_custom_name", emp),
-                key=f"{file_prefix}_custom_name",
-                placeholder="Ej: Cruz Verde",
-                help="Nombre libre para el archivo Excel exportado",
-            )
-        safe_custom = "".join(c if c.isalnum() or c in " _-" else "_" for c in custom_name).strip() or emp
-        fname_final = f"{file_prefix}_{safe_custom}_{fi_c}_{ff_c}.xlsx"
-
+        # Descarga
+        emp_safe = "".join(c if c.isalnum() or c in " _-" else "_" for c in emp).strip() or "export"
+        fname_final = f"{file_prefix}_{emp_safe}_{fi_c}_{ff_c}.xlsx"
+        col_dl, col_info = st.columns([2, 3])
         with col_dl:
-            st.write("")  # alinear verticalmente
             st.download_button(
-                label=f"📥  Descargar Excel",
+                label=f"📥  Descargar Excel — {emp}",
                 data=st.session_state[f"{file_prefix}_excel"],
                 file_name=fname_final,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1070,7 +1085,7 @@ def _page_module(title: str, generator_fn, file_prefix: str, modulo_key: str) ->
         with col_info:
             size_kb = len(st.session_state[f"{file_prefix}_excel"]) // 1024
             st.markdown(
-                f"<div style='padding:1.6rem 0.6rem 0;color:#6B7280;font-size:0.88rem;'>"
+                f"<div style='padding:0.6rem;color:#6B7280;font-size:0.88rem;'>"
                 f"✅ <strong>{count:,}</strong> registros encontrados &nbsp;·&nbsp; "
                 f"Tamaño aprox: <strong>{size_kb} KB</strong></div>",
                 unsafe_allow_html=True,
