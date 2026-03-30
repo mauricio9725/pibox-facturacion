@@ -366,25 +366,100 @@ footer    { visibility: hidden; }
 def _default_users() -> dict:
     admin_pw  = os.getenv("ADMIN_PASSWORD", "pibox2024")
     admin_usr = os.getenv("ADMIN_USER", "admin")
-    force_pw  = os.getenv("ADMIN_PASSWORD") is not None  # forzar cambio si viene de env
-    hashed    = bcrypt.hashpw(admin_pw.encode(), bcrypt.gensalt()).decode()
-    return {"usuarios": [{
-        "username": admin_usr, "password_hash": hashed,
+    force_pw  = os.getenv("ADMIN_PASSWORD") is not None
+    usuarios  = [{
+        "username": admin_usr,
+        "password_hash": bcrypt.hashpw(admin_pw.encode(), bcrypt.gensalt()).decode(),
         "nombre_completo": "Administrador", "rol": "admin",
         "activo": True, "debe_cambiar_password": force_pw,
-    }]}
+    }]
+    # Usuarios adicionales definidos en st.secrets [extra_users]
+    try:
+        extra = st.secrets.get("extra_users", {})
+        for uname, udata in extra.items():
+            raw_pw = udata.get("password", "Pibox2024!")
+            usuarios.append({
+                "username": uname,
+                "password_hash": bcrypt.hashpw(raw_pw.encode(), bcrypt.gensalt()).decode(),
+                "nombre_completo": udata.get("nombre_completo", uname),
+                "rol": udata.get("rol", "operaciones"),
+                "activo": True,
+                "debe_cambiar_password": True,
+            })
+    except Exception:
+        pass
+    return {"usuarios": usuarios}
+
+def _gh_token() -> str:
+    try:
+        return st.secrets.get("GITHUB_TOKEN", "") or os.getenv("GITHUB_TOKEN", "")
+    except Exception:
+        return os.getenv("GITHUB_TOKEN", "")
+
+def _gh_repo() -> str:
+    try:
+        return st.secrets.get("GITHUB_REPO", "") or os.getenv("GITHUB_REPO", "")
+    except Exception:
+        return os.getenv("GITHUB_REPO", "")
+
+def _gh_load() -> dict:
+    import requests as _req, base64 as _b64
+    token, repo = _gh_token(), _gh_repo()
+    if not token or not repo:
+        return {}
+    try:
+        r = _req.get(
+            f"https://api.github.com/repos/{repo}/contents/users.json",
+            headers={"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"},
+            timeout=8,
+        )
+        if r.status_code == 200:
+            return json.loads(_b64.b64decode(r.json()["content"]).decode())
+    except Exception as e:
+        logger.warning(f"GitHub load error: {e}")
+    return {}
+
+def _gh_save(data: dict) -> bool:
+    import requests as _req, base64 as _b64
+    token, repo = _gh_token(), _gh_repo()
+    if not token or not repo:
+        return False
+    try:
+        url = f"https://api.github.com/repos/{repo}/contents/users.json"
+        headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+        sha = ""
+        r = _req.get(url, headers=headers, timeout=8)
+        if r.status_code == 200:
+            sha = r.json().get("sha", "")
+        content = _b64.b64encode(json.dumps(data, indent=2, ensure_ascii=False).encode()).decode()
+        payload = {"message": "update users", "content": content}
+        if sha:
+            payload["sha"] = sha
+        r2 = _req.put(url, headers=headers, json=payload, timeout=8)
+        return r2.status_code in (200, 201)
+    except Exception as e:
+        logger.warning(f"GitHub save error: {e}")
+        return False
 
 def _load_raw() -> dict:
+    gh = _gh_load()
+    if gh:
+        return gh
     if not os.path.exists(USERS_FILE):
-        data = _default_users(); _save_raw(data)
+        data = _default_users()
+        _save_raw(data)
         logger.info("users.json creado con usuario admin por defecto")
         return data
     with open(USERS_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 def _save_raw(data: dict) -> None:
-    with open(USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    _gh_save(data)
+    try:
+        with open(USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
 
 def load_users() -> list:
     return _load_raw()["usuarios"]
@@ -900,11 +975,14 @@ def _render_filters():
         st.write(""); st.write("")
         consultar = st.button("🔍 Consultar", use_container_width=True, type="primary")
 
-    # Nombre personalizado — visible cuando hay selección
+    # Nombre personalizado — resetear si cambia la empresa seleccionada
     if empresa_display:
+        if st.session_state.get("_last_empresa_sel") != empresa_display:
+            st.session_state["_nombre_custom"] = empresa_display
+            st.session_state["_last_empresa_sel"] = empresa_display
         nombre_custom = st.text_input(
             "📝 Nombre del archivo y Excel",
-            value=empresa_display,
+            key="_nombre_custom",
             placeholder="Ej: Cruz Verde",
             help="Este nombre se usará en el archivo exportado y como título dentro del Excel",
         )
