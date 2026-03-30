@@ -744,20 +744,19 @@ def _fmt_cop(value: float) -> str:
 # PÁGINAS
 # ─────────────────────────────────────────────
 def _page_login() -> None:
-    _, col, _ = st.columns([1, 1.6, 1])
+    import os as _os
+    _base = _os.path.dirname(_os.path.abspath(__file__))
+    _logo = next((_os.path.join(_base, f) for f in ["logo.png", "logo.jpeg", "logo.png.jpeg", "logo.jpg"] if _os.path.exists(_os.path.join(_base, f))), "")
+
+    st.markdown("<div style='margin-top:6vh'></div>", unsafe_allow_html=True)
+    _, col, _ = st.columns([1, 1.2, 1])
     with col:
-        import os as _os
-        _base = _os.path.dirname(_os.path.abspath(__file__))
-        _logo = next((_os.path.join(_base, f) for f in ["logo.png", "logo.jpeg", "logo.png.jpeg", "logo.jpg"] if _os.path.exists(_os.path.join(_base, f))), "")
         if _logo:
-            _, lc, _ = st.columns([1, 2, 1])
-            with lc:
-                st.image(_logo, width=180)
-        st.markdown("""
-        <div class="login-wrapper">
-            <div class="login-sub">Portal de Prefacturación</div>
-        </div>
-        """, unsafe_allow_html=True)
+            st.image(_logo, width=160)
+        st.markdown(
+            "<p style='text-align:center;color:#6B7280;font-size:1rem;margin:0.2rem 0 1.4rem'>Portal de Prefacturación</p>",
+            unsafe_allow_html=True,
+        )
         with st.form("login_form"):
             username = st.text_input("Usuario", placeholder="Ingresa tu usuario")
             password = st.text_input("Contraseña", type="password", placeholder="Ingresa tu contraseña")
@@ -802,7 +801,9 @@ def _render_sidebar() -> str:
         _base = _os.path.dirname(_os.path.abspath(__file__))
         _logo = next((_os.path.join(_base, f) for f in ["logo.png", "logo.jpeg", "logo.png.jpeg", "logo.jpg"] if _os.path.exists(_os.path.join(_base, f))), "")
         if _logo:
-            st.image(_logo, width=130)
+            _, sc, _ = st.columns([1, 3, 1])
+            with sc:
+                st.image(_logo, use_container_width=True)
         st.markdown(f"""
         <div style="text-align:center;padding:0.3rem 0 0.5rem">
             <div style="color:rgba(255,255,255,0.85);font-size:0.95rem;font-weight:600;margin-top:2px">
@@ -1044,20 +1045,32 @@ def _page_module(title: str, generator_fn, file_prefix: str, modulo_key: str) ->
         # KPIs
         _render_metrics(df_cached, fi_c, ff_c)
 
-        # Botón de descarga
-        col_dl, col_info = st.columns([2, 3])
+        # Nombre personalizado del archivo
+        col_name, col_dl, col_info = st.columns([2, 2, 3])
+        with col_name:
+            custom_name = st.text_input(
+                "Nombre del archivo",
+                value=st.session_state.get(f"{file_prefix}_custom_name", emp),
+                key=f"{file_prefix}_custom_name",
+                placeholder="Ej: Cruz Verde",
+                help="Nombre libre para el archivo Excel exportado",
+            )
+        safe_custom = "".join(c if c.isalnum() or c in " _-" else "_" for c in custom_name).strip() or emp
+        fname_final = f"{file_prefix}_{safe_custom}_{fi_c}_{ff_c}.xlsx"
+
         with col_dl:
+            st.write("")  # alinear verticalmente
             st.download_button(
-                label=f"📥  Descargar Excel — {title}",
+                label=f"📥  Descargar Excel",
                 data=st.session_state[f"{file_prefix}_excel"],
-                file_name=fname,
+                file_name=fname_final,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
         with col_info:
             size_kb = len(st.session_state[f"{file_prefix}_excel"]) // 1024
             st.markdown(
-                f"<div style='padding:0.6rem;color:#6B7280;font-size:0.88rem;'>"
+                f"<div style='padding:1.6rem 0.6rem 0;color:#6B7280;font-size:0.88rem;'>"
                 f"✅ <strong>{count:,}</strong> registros encontrados &nbsp;·&nbsp; "
                 f"Tamaño aprox: <strong>{size_kb} KB</strong></div>",
                 unsafe_allow_html=True,
