@@ -721,7 +721,7 @@ DROP_SINDUP = {"Package_Reference_Numbers", "Package_Declared_Value", "Estado_Pa
 # ─────────────────────────────────────────────
 # CONSTRUCTORES DE HOJAS
 # ─────────────────────────────────────────────
-def _build_resumen(ws, df: pd.DataFrame, empresa: str, fi: date, ff: date) -> None:
+def _build_resumen(ws, df: pd.DataFrame, empresa: str, fi: date, ff: date, include_pilotos: bool = False) -> None:
     ws.sheet_view.showGridLines = False
     ws.row_dimensions[1].height = 10
     ws.row_dimensions[2].height = 45
@@ -770,9 +770,18 @@ def _build_resumen(ws, df: pd.DataFrame, empresa: str, fi: date, ff: date) -> No
         if label in ("Pago Servicios", "Valor total de la factura:"):
             vc.number_format = '$#,##0'
 
-    # ── Sección análisis pilotos ──────────────────────────────
-    # Fila 9 = Valor total (última fila del tabla anterior)
-    # Columna A = label, Columna B = valor
+    # ── Sección análisis pilotos (solo Prefactura Interna) ───
+    if not include_pilotos:
+        footer_row = 17
+        ws.merge_cells(f"A{footer_row}:J{footer_row}")
+        ws.row_dimensions[footer_row].height = 28
+        fc = ws[f"A{footer_row}"]
+        fc.value = ("El plazo para dar el OK o para pedir ajustes es de 3 días "
+                    "y de esta manera evitar demoras en el proceso de facturación")
+        fc.font = GRAY_FONT
+        fc.alignment = Alignment(horizontal="center", wrap_text=True)
+        return
+
     _anal = [
         (11, "Pago a Pilotos",  "=SUM('Data Pilotos'!K:K)", '$#,##0.00', False),
         (12, "Utilidad",        "=B9-B11",                  '$#,##0',    True),
@@ -847,7 +856,7 @@ def gen_prefactura_cliente(df, empresa, fi, ff) -> bytes:
 
 def gen_prefactura_interna(df, empresa, fi, ff) -> bytes:
     wb = openpyxl.Workbook()
-    ws1 = wb.active; ws1.title = "Resumen"; _build_resumen(ws1, df, empresa, fi, ff)
+    ws1 = wb.active; ws1.title = "Resumen"; _build_resumen(ws1, df, empresa, fi, ff, include_pilotos=True)
     _build_paquetes(wb.create_sheet("Informe Paquetes"), df)
     _build_servicios(wb.create_sheet("Informe Servicios"), df)
     _build_pilotos(wb.create_sheet("Data Pilotos"), df)
