@@ -793,8 +793,10 @@ def _build_servicios(ws, df):
     _finalize_sheet(ws)
 
 def _build_pilotos(ws, df):
+    pil_cols = [c for c in _PILOTOS_MAP.values() if c in df.columns]
+    df_pil = df[pil_cols].drop_duplicates()
     _write_header(ws, list(_PILOTOS_MAP.keys()))
-    _write_data(ws, df, 2, _PILOTOS_MAP)
+    _write_data(ws, df_pil, 2, _PILOTOS_MAP)
     _finalize_sheet(ws)
 
 def _build_data(ws, df):
