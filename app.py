@@ -770,7 +770,31 @@ def _build_resumen(ws, df: pd.DataFrame, empresa: str, fi: date, ff: date) -> No
         if label in ("Pago Servicios", "Valor total de la factura:"):
             vc.number_format = '$#,##0'
 
-    footer_row = 6 + len(tabla) + 2
+    # ── Sección análisis pilotos ──────────────────────────────
+    # Fila 9 = Valor total (última fila del tabla anterior)
+    # Columna A = label, Columna B = valor
+    _anal = [
+        (11, "Pago a Pilotos",  "=SUM('Data Pilotos'!K:K)", '$#,##0.00', False),
+        (12, "Utilidad",        "=B9-B11",                  '$#,##0',    True),
+        (14, "Ganancia Corp",   "=SUM('Data Pilotos'!J:J)", '$#,##0.00', False),
+        (15, "Dif",             "=B12-B14",                 '$#,##0',    True),
+    ]
+    for row_n, lbl, formula, num_fmt, is_total in _anal:
+        ws.row_dimensions[row_n].height = 22
+        lc = ws.cell(row=row_n, column=1, value=lbl)
+        vc = ws.cell(row=row_n, column=2, value=formula)
+        vc.number_format = num_fmt
+        lc.border = THIN_BORDER; vc.border = THIN_BORDER
+        lc.alignment = Alignment(horizontal="left",  vertical="center")
+        vc.alignment = Alignment(horizontal="right", vertical="center")
+        if is_total:
+            lc.font = TOTAL_FONT; vc.font = TOTAL_FONT
+            lc.fill = TOTAL_FILL; vc.fill = TOTAL_FILL
+        else:
+            lc.font = DATA_FONT;  vc.font = DATA_FONT
+            lc.fill = LIGHT_FILL; vc.fill = LIGHT_FILL
+
+    footer_row = 17
     ws.merge_cells(f"A{footer_row}:J{footer_row}")
     ws.row_dimensions[footer_row].height = 28
     fc = ws[f"A{footer_row}"]
