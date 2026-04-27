@@ -1394,25 +1394,30 @@ def _page_error_tracker() -> None:
             st.caption(f"🔄 Última actualización DAG: {lr.iloc[-1]}")
 
     # ── Filtros ─────────────────────────────────────────────────
-    col_f1, col_f2, col_f3 = st.columns([2, 2, 2])
+    col_f1, col_f2, col_f3, col_f4 = st.columns([2, 2, 2, 2])
     with col_f1:
+        meses_disp = sorted(df_raw["Fecha_VERDADERA"].dropna().astype(str).str[:7].unique().tolist(), reverse=True)
+        sel_mes = st.multiselect("📅 Mes", meses_disp, placeholder="Todos los meses")
+    with col_f2:
         empresas = sorted(df_raw["Nombre_Compania"].dropna().unique().tolist())
         sel_emp = st.multiselect("🏢 Empresa", empresas, placeholder="Todas las empresas")
-    with col_f2:
+    with col_f3:
         error_labels = {v[1]: k for k, v in ERROR_CONTROLS.items()}
         sel_err = st.multiselect("⚠️ Tipo de error", list(error_labels.keys()), placeholder="Todos los errores")
-    with col_f3:
+    with col_f4:
         ciudades = sorted(df_raw["Ciudad"].dropna().unique().tolist())
         sel_ciudad = st.multiselect("📍 Ciudad", ciudades, placeholder="Todas las ciudades")
 
     df = df_raw.copy()
+    if sel_mes:
+        df = df[df["Fecha_VERDADERA"].astype(str).str[:7].isin(sel_mes)]
     if sel_emp:
         df = df[df["Nombre_Compania"].isin(sel_emp)]
     if sel_ciudad:
         df = df[df["Ciudad"].isin(sel_ciudad)]
     if sel_err:
         cols_sel = [error_labels[l] for l in sel_err]
-        mask = df[cols_sel].notna().any(axis=1)
+        mask = df[cols_sel].apply(lambda col: col != "Booking normal").any(axis=1)
         df = df[mask]
 
     st.divider()
