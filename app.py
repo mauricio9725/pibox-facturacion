@@ -546,11 +546,22 @@ def count_active_admins() -> int:
 # ─────────────────────────────────────────────
 # BASE DE DATOS
 # ─────────────────────────────────────────────
+def _cfg(key: str, default: str = "") -> str:
+    """Lee config desde st.secrets primero, luego env var."""
+    try:
+        v = st.secrets.get(key, None)
+        if v:
+            return str(v)
+    except Exception:
+        pass
+    return os.getenv(key, default)
+
 def _get_client():
     return clickhouse_connect.get_client(
-        host=os.getenv("CH_HOST", ""), port=int(os.getenv("CH_PORT", 8443)),
-        username=os.getenv("CH_USER", ""), password=os.getenv("CH_PASSWORD", ""),
-        database=os.getenv("CH_DATABASE", ""), secure=True,
+        host=_cfg("CH_HOST"), port=int(_cfg("CH_PORT", "8443")),
+        username=_cfg("CH_USER"), password=_cfg("CH_PASSWORD"),
+        database=_cfg("CH_DATABASE"), secure=True,
+        connect_timeout=30, send_receive_timeout=300,
     )
 
 @st.cache_data(ttl=1800, show_spinner=False)
