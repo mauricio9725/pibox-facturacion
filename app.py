@@ -560,8 +560,8 @@ def _get_client():
     return clickhouse_connect.get_client(
         host=_cfg("CH_HOST"), port=int(_cfg("CH_PORT", "8443")),
         username=_cfg("CH_USER"), password=_cfg("CH_PASSWORD"),
-        database=_cfg("CH_DATABASE"), secure=True,
-        connect_timeout=30, send_receive_timeout=300,
+        database=_cfg("CH_DATABASE"), secure=True, verify=False,
+        compress=False, connect_timeout=30, send_receive_timeout=300,
     )
 
 @st.cache_data(ttl=1800, show_spinner=False)
