@@ -606,6 +606,23 @@ def query_data(search_mode: str, search_value, fi: date, ff: date):
         logger.error(f"Query error: {exc}")
         return None, str(exc)
 
+def query_data_all(fi: date, ff: date):
+    """Descarga TODA la data del período sin filtro de empresa."""
+    try:
+        sql = (
+            f"SELECT * FROM picapmongoprod.reporte_facturacion "
+            f"WHERE Fecha_VERDADERA BETWEEN '{fi}' AND '{ff}'"
+        )
+        logger.info(f"Query ALL: {fi} → {ff}")
+        df = _get_client().query_df(sql)
+        for col in df.select_dtypes(include=["datetimetz"]).columns:
+            df[col] = df[col].dt.tz_localize(None)
+        logger.info(f"Query ALL OK: {len(df)} filas")
+        return df, None
+    except Exception as exc:
+        logger.error(f"Query ALL error: {exc}")
+        return None, str(exc)
+
 
 # ─────────────────────────────────────────────
 # UTILIDADES EXCEL
@@ -725,6 +742,7 @@ DATA_COLS_ORDER = [
     "Final_cost", "Additional_final_cost", "Dispute_final_cost",
     "Total_final_cost", "express_service", "return_to_origin",
     "id_paquete", "NIT", "cost_center",
+    "Phone_Driver", "Email_Driver",
 ]
 DROP_SINDUP = {"Package_Reference_Numbers", "Package_Declared_Value", "Estado_Paquete", "Contraentrega", "id_paquete"}
 
@@ -1249,6 +1267,70 @@ def _page_module(title: str, generator_fn, file_prefix: str, modulo_key: str) ->
             _render_preview(df_cached, modulo_key, emp, fi_c, ff_c)
 
 
+def _page_data() -> None:
+    """Página Data: descarga toda la data por rango de fechas. Solo financiero/admin."""
+    st.markdown(
+        """<div class="module-banner">
+            <div class="module-banner-icon">🗃️</div>
+            <div class="module-banner-text">
+                <h2>Data</h2>
+                <p>Exporta la data completa del período seleccionado</p>
+            </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    col_fi, col_ff, col_btn = st.columns([2, 2, 1])
+    with col_fi:
+        fi = st.date_input("Fecha inicio", value=date.today().replace(day=1), key="data_fi")
+    with col_ff:
+        ff = st.date_input("Fecha fin", value=date.today(), key="data_ff")
+    with col_btn:
+        st.markdown("<div style='margin-top:1.8rem'></div>", unsafe_allow_html=True)
+        consultar = st.button("🔍 Consultar", type="primary", use_container_width=True)
+
+    if consultar:
+        if fi > ff:
+            st.warning("⚠️ La fecha inicio no puede ser mayor a la fecha fin.")
+            return
+        st.session_state.pop("data_all_excel", None)
+        _loader = _show_moto_loader(f"Consultando datos {fi} → {ff}...")
+        df, error = query_data_all(fi, ff)
+        _loader.empty()
+        if error:
+            with st.expander("❌ Error al consultar"):
+                st.code(error)
+            return
+        if df is None or df.empty:
+            st.warning("⚠️ No se encontraron registros para ese período.")
+            return
+        _loader2 = _show_moto_loader("Generando Excel...")
+        excel_bytes = gen_data_excel(df, f"Todo_{fi}_{ff}", fi, ff)
+        _loader2.empty()
+        st.session_state["data_all_excel"]    = excel_bytes
+        st.session_state["data_all_count"]    = len(df)
+        st.session_state["data_all_fi"]       = fi
+        st.session_state["data_all_ff"]       = ff
+
+    if "data_all_excel" in st.session_state:
+        fi_c  = st.session_state["data_all_fi"]
+        ff_c  = st.session_state["data_all_ff"]
+        count = st.session_state["data_all_count"]
+        st.divider()
+        col_dl, col_info = st.columns([2, 3])
+        with col_dl:
+            st.download_button(
+                label=f"📥 Descargar Excel — Todo el período",
+                data=st.session_state["data_all_excel"],
+                file_name=f"Data_{fi_c}_{ff_c}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                type="primary",
+            )
+        with col_info:
+            st.success(f"✅ {count:,} registros encontrados · {fi_c} → {ff_c}")
+
+
 def _page_gestion_usuarios() -> None:
     st.title("👥 Gestión de Usuarios")
     usuarios = load_users()
@@ -1367,7 +1449,7 @@ def main() -> None:
 
     if   menu == "Prefactura Cliente":  _page_module("📊 Prefactura Cliente",  gen_prefactura_cliente,  "Prefactura_Cliente", "cliente")
     elif menu == "Prefactura Interna":  _page_module("📋 Prefactura Interna",  gen_prefactura_interna,  "Prefactura_Interna", "interna")
-    elif menu == "Data":                _page_module("🗃️ Data",                gen_data_excel,          "Data",               "data")
+    elif menu == "Data":                _page_data() if rol in ("financiero", "admin") else _page_module("🗃️ Data", gen_data_excel, "Data", "data")
     elif menu == "Gestión de Usuarios": _page_gestion_usuarios()
     elif menu == "Configuración":       _page_configuracion()
 
