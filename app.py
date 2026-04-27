@@ -33,14 +33,25 @@ MENU_ICONS = {
     "Prefactura Cliente":   "📊  Prefactura Cliente",
     "Prefactura Interna":   "📋  Prefactura Interna",
     "Data":                 "🗃️  Data",
+    "Error Tracker":        "🚨  Error Tracker",
     "Gestión de Usuarios":  "👥  Gestión de Usuarios",
     "Configuración":        "⚙️  Configuración",
 }
 MENU_BY_ROL = {
-    "admin":       ["Prefactura Cliente", "Prefactura Interna", "Data", "Gestión de Usuarios", "Configuración"],
+    "admin":       ["Prefactura Cliente", "Prefactura Interna", "Data", "Error Tracker", "Gestión de Usuarios", "Configuración"],
     "operaciones": ["Prefactura Cliente", "Prefactura Interna", "Data", "Configuración"],
-    "financiero":  ["Prefactura Cliente", "Prefactura Interna", "Data"],
+    "financiero":  ["Prefactura Cliente", "Prefactura Interna", "Data", "Error Tracker"],
     "cliente":     ["Prefactura Cliente", "Configuración"],
+}
+
+ERROR_CONTROLS = {
+    "CONTROL_300":                 ("CONTROL_300_valor",                "💰 Control 300"),
+    "CONTROL_CERO":                ("CONTROL_CERO_valor",               "⭕ GMV Cero"),
+    "CONTROL_VALOR_ALTO":          ("CONTROL_VALOR_ALTO_valor",         "📈 Valor Alto"),
+    "CONTROL_VALOR_BAJO":          ("CONTROL_VALOR_BAJO_valor",         "📉 Valor Bajo"),
+    "Control_balanceados_company": ("Control_balanceados_company_diff", "🏢 Balance Company"),
+    "Control_balanceados_driver":  ("Control_balanceados_driver_diff",  "🏍️ Balance Driver"),
+    "Control_perdidas":            ("Control_perdidas_diff",            "🔴 Pérdidas"),
 }
 
 # ─────────────────────────────────────────────
@@ -606,6 +617,27 @@ def query_data(search_mode: str, search_value, fi: date, ff: date):
         logger.error(f"Query error: {exc}")
         return None, str(exc)
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def query_error_tracker() -> pd.DataFrame:
+    """Carga últimos 3 meses de pibox_error_tracker_2, solo registros con al menos un error."""
+    try:
+        conditions = " OR ".join(
+            [f"{c} IS NOT NULL" for c in ERROR_CONTROLS.keys()]
+        )
+        sql = (
+            "SELECT * FROM picapmongoprod.pibox_error_tracker_2 "
+            f"WHERE Fecha_VERDADERA >= today() - INTERVAL 3 MONTH "
+            f"AND ({conditions})"
+        )
+        df = _get_client().query_df(sql)
+        for col in df.select_dtypes(include=["datetimetz"]).columns:
+            df[col] = df[col].dt.tz_localize(None)
+        logger.info(f"Error Tracker OK: {len(df)} filas")
+        return df
+    except Exception as exc:
+        logger.error(f"Error Tracker error: {exc}")
+        return pd.DataFrame()
+
 def query_data_all(fi: date, ff: date):
     """Descarga TODA la data del período sin filtro de empresa."""
     try:
@@ -722,6 +754,7 @@ _PILOTOS_MAP = {
     "EMPRESA": "Nombre_Compania", "TIPO VEHICULO": "vt_name_es",
     "ID Driver": "Driver_ID", "Nombre Driver": "Nombre_Driver",
     "Tipo Documento Driver": "Document_Type", "Número documento Driver": "COD_Identification",
+    "Celular Driver": "Phone_Driver", "Email Driver": "Email_Driver",
     "Monto": "GMV", "Ganancia Corporativa": "Ganancia_Corporativo",
     "Ingreso Piloto": "VAL_AMOUNT_BOOKING_DRIVER_PAYMENT",
 }
@@ -1335,6 +1368,124 @@ def _page_data() -> None:
             st.success(f"✅ {count:,} registros encontrados · {fi_c} → {ff_c}")
 
 
+def _page_error_tracker() -> None:
+    st.markdown(
+        """<div class="module-banner">
+            <div class="module-banner-icon">🚨</div>
+            <div class="module-banner-text">
+                <h2>Pibox Error Tracker</h2>
+                <p>Bookings con alertas de control — últimos 3 meses</p>
+            </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    with st.spinner("Cargando datos de errores..."):
+        df_raw = query_error_tracker()
+
+    if df_raw.empty:
+        st.warning("⚠️ No se encontraron registros con errores en los últimos 3 meses.")
+        return
+
+    # ── Refresh info ────────────────────────────────────────────
+    if "last_refresh" in df_raw.columns:
+        lr = df_raw["last_refresh"].dropna()
+        if not lr.empty:
+            st.caption(f"🔄 Última actualización DAG: {lr.iloc[-1]}")
+
+    # ── Filtros ─────────────────────────────────────────────────
+    col_f1, col_f2, col_f3 = st.columns([2, 2, 2])
+    with col_f1:
+        empresas = sorted(df_raw["Nombre_Compania"].dropna().unique().tolist())
+        sel_emp = st.multiselect("🏢 Empresa", empresas, placeholder="Todas las empresas")
+    with col_f2:
+        error_labels = {v[1]: k for k, v in ERROR_CONTROLS.items()}
+        sel_err = st.multiselect("⚠️ Tipo de error", list(error_labels.keys()), placeholder="Todos los errores")
+    with col_f3:
+        ciudades = sorted(df_raw["Ciudad"].dropna().unique().tolist())
+        sel_ciudad = st.multiselect("📍 Ciudad", ciudades, placeholder="Todas las ciudades")
+
+    df = df_raw.copy()
+    if sel_emp:
+        df = df[df["Nombre_Compania"].isin(sel_emp)]
+    if sel_ciudad:
+        df = df[df["Ciudad"].isin(sel_ciudad)]
+    if sel_err:
+        cols_sel = [error_labels[l] for l in sel_err]
+        mask = df[cols_sel].notna().any(axis=1)
+        df = df[mask]
+
+    st.divider()
+
+    # ── KPIs por tipo de error ───────────────────────────────────
+    st.markdown("#### Resumen de alertas")
+    kpi_cols = st.columns(len(ERROR_CONTROLS))
+    for i, (ctrl, (val_col, label)) in enumerate(ERROR_CONTROLS.items()):
+        count = int(df[ctrl].notna().sum()) if ctrl in df.columns else 0
+        valor = df[val_col].sum() if val_col in df.columns else 0
+        with kpi_cols[i]:
+            st.markdown(
+                f"""<div style="background:linear-gradient(135deg,#6B21A8,#4C1D95);border-radius:12px;
+                padding:1rem;text-align:center;color:white;min-height:100px">
+                <div style="font-size:1.6rem;font-weight:700">{count:,}</div>
+                <div style="font-size:0.7rem;opacity:0.85;margin-top:0.2rem">{label}</div>
+                <div style="font-size:0.75rem;margin-top:0.3rem;opacity:0.7">${valor:,.0f}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
+
+    # ── Gráfico por empresa ──────────────────────────────────────
+    st.markdown("#### Errores por empresa")
+    err_counts = {}
+    for ctrl, (_, label) in ERROR_CONTROLS.items():
+        if ctrl in df.columns:
+            grp = df[df[ctrl].notna()].groupby("Nombre_Compania").size()
+            err_counts[label] = grp
+    if err_counts:
+        chart_df = pd.DataFrame(err_counts).fillna(0).astype(int)
+        chart_df = chart_df[chart_df.sum(axis=1) > 0].sort_values(chart_df.columns[0], ascending=False).head(20)
+        st.bar_chart(chart_df, use_container_width=True)
+
+    st.divider()
+
+    # ── Tabla detalle ────────────────────────────────────────────
+    st.markdown(f"#### Detalle — {len(df):,} bookings con alertas")
+
+    detail_cols = ["Booking_ID", "Fecha_VERDADERA", "Nombre_Compania", "Ciudad",
+                   "vt_name_es", "KAM", "GMV"] + list(ERROR_CONTROLS.keys())
+    detail_cols = [c for c in detail_cols if c in df.columns]
+
+    q = st.text_input("🔍 Buscar booking, empresa...", placeholder="ID, empresa, ciudad...")
+    df_show = df[detail_cols].copy()
+    if q:
+        mask = df_show.astype(str).apply(lambda c: c.str.contains(q, case=False, na=False)).any(axis=1)
+        df_show = df_show[mask]
+
+    st.dataframe(
+        df_show.style.apply(
+            lambda col: ["background-color:#fef3c7" if v is not None and str(v) not in ("", "nan", "None") else "" for v in col]
+            if col.name in ERROR_CONTROLS else [""] * len(col),
+            axis=0,
+        ),
+        use_container_width=True,
+        height=450,
+        hide_index=True,
+    )
+
+    # ── Descarga ─────────────────────────────────────────────────
+    buf = BytesIO()
+    df[detail_cols].to_excel(buf, index=False, sheet_name="Error Tracker")
+    buf.seek(0)
+    st.download_button(
+        "📥 Descargar Excel",
+        data=buf.getvalue(),
+        file_name=f"Error_Tracker_{date.today()}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 def _page_gestion_usuarios() -> None:
     st.title("👥 Gestión de Usuarios")
     usuarios = load_users()
@@ -1454,6 +1605,7 @@ def main() -> None:
     if   menu == "Prefactura Cliente":  _page_module("📊 Prefactura Cliente",  gen_prefactura_cliente,  "Prefactura_Cliente", "cliente")
     elif menu == "Prefactura Interna":  _page_module("📋 Prefactura Interna",  gen_prefactura_interna,  "Prefactura_Interna", "interna")
     elif menu == "Data":                _page_data() if rol in ("financiero", "admin") else _page_module("🗃️ Data", gen_data_excel, "Data", "data")
+    elif menu == "Error Tracker":       _page_error_tracker()
     elif menu == "Gestión de Usuarios": _page_gestion_usuarios()
     elif menu == "Configuración":       _page_configuracion()
 
