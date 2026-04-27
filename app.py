@@ -622,7 +622,7 @@ def query_error_tracker() -> pd.DataFrame:
     """Carga últimos 3 meses de pibox_error_tracker_2, solo registros con al menos un error."""
     try:
         conditions = " OR ".join(
-            [f"{c} IS NOT NULL" for c in ERROR_CONTROLS.keys()]
+            [f"{c} != 'Booking normal'" for c in ERROR_CONTROLS.keys()]
         )
         sql = (
             "SELECT * FROM picapmongoprod.pibox_error_tracker_2 "
@@ -1421,7 +1421,7 @@ def _page_error_tracker() -> None:
     st.markdown("#### Resumen de alertas")
     kpi_cols = st.columns(len(ERROR_CONTROLS))
     for i, (ctrl, (val_col, label)) in enumerate(ERROR_CONTROLS.items()):
-        count = int(df[ctrl].notna().sum()) if ctrl in df.columns else 0
+        count = int((df[ctrl] != "Booking normal").sum()) if ctrl in df.columns else 0
         valor = df[val_col].sum() if val_col in df.columns else 0
         with kpi_cols[i]:
             st.markdown(
@@ -1463,16 +1463,10 @@ def _page_error_tracker() -> None:
         mask = df_show.astype(str).apply(lambda c: c.str.contains(q, case=False, na=False)).any(axis=1)
         df_show = df_show[mask]
 
-    st.dataframe(
-        df_show.style.apply(
-            lambda col: ["background-color:#fef3c7" if v is not None and str(v) not in ("", "nan", "None") else "" for v in col]
-            if col.name in ERROR_CONTROLS else [""] * len(col),
-            axis=0,
-        ),
-        use_container_width=True,
-        height=450,
-        hide_index=True,
-    )
+    # Renombrar columnas de control para mostrar etiquetas legibles
+    rename_map = {k: v[1] for k, v in ERROR_CONTROLS.items()}
+    df_show = df_show.rename(columns=rename_map)
+    st.dataframe(df_show, use_container_width=True, height=450, hide_index=True)
 
     # ── Descarga ─────────────────────────────────────────────────
     buf = BytesIO()
