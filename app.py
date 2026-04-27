@@ -892,10 +892,14 @@ def gen_prefactura_interna(df, empresa, fi, ff) -> bytes:
     return _wb_to_bytes(wb)
 
 def gen_data_excel(df, empresa, fi, ff) -> bytes:
-    wb = openpyxl.Workbook()
-    ws1 = wb.active; ws1.title = "Data"; _build_data(ws1, df)
-    _build_sin_duplicados(wb.create_sheet("Sin Duplicados"), df)
-    return _wb_to_bytes(wb)
+    cols = [c for c in DATA_COLS_ORDER if c in df.columns]
+    cols_nodup = [c for c in cols if c not in DROP_SINDUP]
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df[cols].to_excel(writer, sheet_name="Data", index=False)
+        df[cols_nodup].drop_duplicates().to_excel(writer, sheet_name="Sin Duplicados", index=False)
+    buf.seek(0)
+    return buf.getvalue()
 
 
 # ─────────────────────────────────────────────
