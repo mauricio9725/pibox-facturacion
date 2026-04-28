@@ -1499,9 +1499,14 @@ def _page_error_tracker() -> None:
         with col_tbl:
             st.dataframe(pivot, use_container_width=True, hide_index=True)
         with col_chart:
-            top10 = pivot.set_index("Empresa")[["Total"]].head(10).sort_values("Total")
-            st.markdown("**Top 10 por total de errores**")
-            st.bar_chart(top10, use_container_width=True)
+            import altair as alt
+            top10 = pivot[["Empresa", "Total"]].head(10).copy()
+            chart = alt.Chart(top10).mark_bar(color="#6B21A8").encode(
+                x=alt.X("Total:Q", title="Errores"),
+                y=alt.Y("Empresa:N", sort="-x", title=None),
+                tooltip=["Empresa", "Total"],
+            ).properties(title="Top 10 por total de errores", height=320)
+            st.altair_chart(chart, use_container_width=True)
 
     st.divider()
 
