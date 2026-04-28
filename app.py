@@ -1452,12 +1452,36 @@ def _page_error_tracker() -> None:
 
     st.divider()
 
-    # ── KPIs por tipo de error ───────────────────────────────────
+    # ── Columnas visibles según filtro ───────────────────────────
+    if filtro_cierre == "Solo afectan cierre":
+        _ctrl_visible = {k: v for k, v in ERROR_CONTROLS.items() if k in _AFECTAN_CIERRE}
+    elif filtro_cierre == "Solo no afectan cierre":
+        _ctrl_visible = {k: v for k, v in ERROR_CONTROLS.items() if k in _NO_AFECTAN}
+    else:
+        _ctrl_visible = ERROR_CONTROLS
+
+    # ── Resumen total dinámico ────────────────────────────────────
+    total_novedades = sum(
+        int((df[ctrl] != "Booking normal").sum())
+        for ctrl in _ctrl_visible if ctrl in df.columns
+    )
+    st.markdown(
+        f"""<div style="background:linear-gradient(135deg,#4C1D95,#6B21A8);border-radius:14px;
+        padding:1.2rem 2rem;color:white;display:flex;align-items:center;gap:2rem;margin-bottom:1rem">
+        <div style="font-size:2.5rem;font-weight:800">{total_novedades:,}</div>
+        <div>
+            <div style="font-size:1rem;font-weight:600">Total novedades</div>
+            <div style="font-size:0.8rem;opacity:0.8">{filtro_cierre} · {", ".join(sel_mes) if sel_mes else "Todos los meses"}</div>
+        </div></div>""",
+        unsafe_allow_html=True,
+    )
+
+    # ── KPIs dinámicos (solo los del filtro activo) ───────────────
     st.markdown("#### Resumen de alertas")
-    kpi_cols = st.columns(len(ERROR_CONTROLS))
-    for i, (ctrl, (val_col, label)) in enumerate(ERROR_CONTROLS.items()):
+    kpi_cols = st.columns(len(_ctrl_visible))
+    for i, (ctrl, (val_col, label)) in enumerate(_ctrl_visible.items()):
         count = int((df[ctrl] != "Booking normal").sum()) if ctrl in df.columns else 0
-        valor = df[val_col].sum() if val_col in df.columns else 0
+        valor = df.loc[df[ctrl] != "Booking normal", val_col].sum() if ctrl in df.columns and val_col in df.columns else 0
         with kpi_cols[i]:
             st.markdown(
                 f"""<div style="background:linear-gradient(135deg,#6B21A8,#4C1D95);border-radius:12px;
@@ -1469,19 +1493,10 @@ def _page_error_tracker() -> None:
                 unsafe_allow_html=True,
             )
 
-    st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top:1.2rem'></div>", unsafe_allow_html=True)
 
-    # ── Tabla pivot top 20 + gráfico top 10 ─────────────────────
+    # ── Tabla pivot + gráfico ────────────────────────────────────
     st.markdown("#### Top 20 empresas con más errores")
-
-    # Filtrar columnas según impacto en cierre
-    if filtro_cierre == "Solo afectan cierre":
-        _ctrl_visible = {k: v for k, v in ERROR_CONTROLS.items() if k in _AFECTAN_CIERRE}
-    elif filtro_cierre == "Solo no afectan cierre":
-        _ctrl_visible = {k: v for k, v in ERROR_CONTROLS.items() if k in _NO_AFECTAN}
-    else:
-        _ctrl_visible = ERROR_CONTROLS
-
     err_counts = {}
     for ctrl, (_, label) in _ctrl_visible.items():
         if ctrl in df.columns:
@@ -1489,32 +1504,36 @@ def _page_error_tracker() -> None:
             err_counts[label] = grp
 
     if err_counts:
+        import altair as alt
         pivot = pd.DataFrame(err_counts).fillna(0).astype(int)
         pivot["Total"] = pivot.sum(axis=1)
         pivot = pivot[pivot["Total"] > 0].sort_values("Total", ascending=False).head(20)
         pivot.index.name = "Empresa"
         pivot = pivot.reset_index()
 
-        col_tbl, col_chart = st.columns([3, 2])
+        _row_h   = 35
+        _tbl_h   = min(len(pivot) * _row_h + 38, 720)
+        _chart_h = _tbl_h
+
+        col_tbl, col_chart = st.columns([1, 1])
         with col_tbl:
-            st.dataframe(pivot, use_container_width=True, hide_index=True)
+            st.dataframe(pivot, use_container_width=True, hide_index=True, height=_tbl_h)
         with col_chart:
-            import altair as alt
             top10 = pivot[["Empresa", "Total"]].head(10).copy()
-            _h = max(320, len(top10) * 38)
             base = alt.Chart(top10).encode(
-                y=alt.Y("Empresa:N", sort="-x", title=None),
+                y=alt.Y("Empresa:N", sort="-x", title=None, axis=alt.Axis(labelLimit=160)),
                 tooltip=["Empresa:N", "Total:Q"],
             )
-            bars = base.mark_bar(color="#6B21A8").encode(
+            bars   = base.mark_bar(color="#6B21A8").encode(
                 x=alt.X("Total:Q", title="Errores", axis=alt.Axis(tickMinStep=1)),
             )
             labels = base.mark_text(align="left", dx=4, color="#4C1D95", fontWeight="bold").encode(
-                x=alt.X("Total:Q"),
-                text=alt.Text("Total:Q"),
+                x="Total:Q", text="Total:Q",
             )
-            chart = (bars + labels).properties(title="Top 10 por total de errores", height=_h)
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(
+                (bars + labels).properties(title="Top 10 por total de errores", height=_chart_h),
+                use_container_width=True,
+            )
 
     st.divider()
 
