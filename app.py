@@ -1393,11 +1393,17 @@ def _page_error_tracker() -> None:
         if not lr.empty:
             st.caption(f"🔄 Última actualización DAG: {lr.iloc[-1]}")
 
+    # ── Calcular mes anterior por defecto ───────────────────────
+    from datetime import timedelta
+    _hoy = date.today()
+    _mes_anterior = (_hoy.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    meses_disp = sorted(df_raw["Fecha_VERDADERA"].dropna().astype(str).str[:7].unique().tolist(), reverse=True)
+    _default_mes = [_mes_anterior] if _mes_anterior in meses_disp else []
+
     # ── Filtros ─────────────────────────────────────────────────
     col_f1, col_f2, col_f3, col_f4 = st.columns([2, 2, 2, 2])
     with col_f1:
-        meses_disp = sorted(df_raw["Fecha_VERDADERA"].dropna().astype(str).str[:7].unique().tolist(), reverse=True)
-        sel_mes = st.multiselect("📅 Mes", meses_disp, placeholder="Todos los meses")
+        sel_mes = st.multiselect("📅 Mes", meses_disp, default=_default_mes)
     with col_f2:
         empresas = sorted(df_raw["Nombre_Compania"].dropna().unique().tolist())
         sel_emp = st.multiselect("🏢 Empresa", empresas, placeholder="Todas las empresas")
@@ -1408,9 +1414,13 @@ def _page_error_tracker() -> None:
         ciudades = sorted(df_raw["Ciudad"].dropna().unique().tolist())
         sel_ciudad = st.multiselect("📍 Ciudad", ciudades, placeholder="Todas las ciudades")
 
+    incluir_cero = st.toggle("Incluir bookings en cero (GMV = 0)", value=False)
+
     df = df_raw.copy()
     if sel_mes:
         df = df[df["Fecha_VERDADERA"].astype(str).str[:7].isin(sel_mes)]
+    if not incluir_cero and "CONTROL_CERO" in df.columns:
+        df = df[df["CONTROL_CERO"] == "Booking normal"]
     if sel_emp:
         df = df[df["Nombre_Compania"].isin(sel_emp)]
     if sel_ciudad:
@@ -1441,16 +1451,17 @@ def _page_error_tracker() -> None:
 
     st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
 
-    # ── Gráfico por empresa ──────────────────────────────────────
-    st.markdown("#### Errores por empresa")
+    # ── Gráfico top 20 por empresa ───────────────────────────────
+    st.markdown("#### Top 20 empresas con más errores")
     err_counts = {}
     for ctrl, (_, label) in ERROR_CONTROLS.items():
         if ctrl in df.columns:
-            grp = df[df[ctrl].notna()].groupby("Nombre_Compania").size()
+            grp = df[df[ctrl] != "Booking normal"].groupby("Nombre_Compania").size()
             err_counts[label] = grp
     if err_counts:
         chart_df = pd.DataFrame(err_counts).fillna(0).astype(int)
-        chart_df = chart_df[chart_df.sum(axis=1) > 0].sort_values(chart_df.columns[0], ascending=False).head(20)
+        chart_df["Total"] = chart_df.sum(axis=1)
+        chart_df = chart_df[chart_df["Total"] > 0].sort_values("Total", ascending=False).head(20).drop(columns="Total")
         st.bar_chart(chart_df, use_container_width=True)
 
     st.divider()
