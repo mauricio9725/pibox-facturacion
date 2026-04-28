@@ -627,6 +627,7 @@ def query_error_tracker() -> pd.DataFrame:
         sql = (
             "SELECT * FROM picapmongoprod.pibox_error_tracker_2 "
             f"WHERE Fecha_VERDADERA >= today() - INTERVAL 3 MONTH "
+            f"AND Company_ID != '64109ea8ff24f8002c7f267b' "
             f"AND ({conditions})"
         )
         df = _get_client().query_df(sql)
@@ -1397,8 +1398,10 @@ def _page_error_tracker() -> None:
     from datetime import timedelta
     _hoy = date.today()
     _mes_anterior = (_hoy.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    _mes_actual   = _hoy.strftime("%Y-%m")
+    _default_key  = _mes_anterior if _hoy.day <= 10 else _mes_actual
     meses_disp = sorted(df_raw["Fecha_VERDADERA"].dropna().astype(str).str[:7].unique().tolist(), reverse=True)
-    _default_mes = [_mes_anterior] if _mes_anterior in meses_disp else []
+    _default_mes = [_default_key] if _default_key in meses_disp else []
 
     # ── Filtros ─────────────────────────────────────────────────
     col_f1, col_f2, col_f3, col_f4 = st.columns([2, 2, 2, 2])
