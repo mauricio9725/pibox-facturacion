@@ -1496,7 +1496,6 @@ def _page_error_tracker() -> None:
     st.markdown("<div style='margin-top:1.2rem'></div>", unsafe_allow_html=True)
 
     # ── Tabla pivot + gráfico ────────────────────────────────────
-    st.markdown("#### Top 20 empresas con más errores")
     err_counts = {}
     for ctrl, (_, label) in _ctrl_visible.items():
         if ctrl in df.columns:
@@ -1512,28 +1511,30 @@ def _page_error_tracker() -> None:
         pivot = pivot.reset_index()
 
         _row_h   = 35
+        _chart_h = min(10 * _row_h + 38, 420)
         _tbl_h   = min(len(pivot) * _row_h + 38, 720)
-        _chart_h = _tbl_h
 
-        col_tbl, col_chart = st.columns([1, 1])
-        with col_tbl:
-            st.dataframe(pivot, use_container_width=True, hide_index=True, height=_tbl_h)
-        with col_chart:
-            top10 = pivot[["Empresa", "Total"]].head(10).copy()
-            base = alt.Chart(top10).encode(
-                y=alt.Y("Empresa:N", sort="-x", title=None, axis=alt.Axis(labelLimit=160)),
-                tooltip=["Empresa:N", "Total:Q"],
-            )
-            bars   = base.mark_bar(color="#6B21A8").encode(
-                x=alt.X("Total:Q", title="Errores", axis=alt.Axis(tickMinStep=1)),
-            )
-            labels = base.mark_text(align="left", dx=4, color="#4C1D95", fontWeight="bold").encode(
-                x="Total:Q", text="Total:Q",
-            )
-            st.altair_chart(
-                (bars + labels).properties(title="Top 10 por total de errores", height=_chart_h),
-                use_container_width=True,
-            )
+        # Gráfico arriba
+        st.markdown("#### Top 10 empresas con más errores")
+        top10 = pivot[["Empresa", "Total"]].head(10).copy()
+        base = alt.Chart(top10).encode(
+            y=alt.Y("Empresa:N", sort="-x", title=None, axis=alt.Axis(labelLimit=160)),
+            tooltip=["Empresa:N", "Total:Q"],
+        )
+        bars   = base.mark_bar(color="#6B21A8").encode(
+            x=alt.X("Total:Q", title="Errores", axis=alt.Axis(tickMinStep=1)),
+        )
+        labels = base.mark_text(align="left", dx=4, color="#4C1D95", fontWeight="bold").encode(
+            x="Total:Q", text="Total:Q",
+        )
+        st.altair_chart(
+            (bars + labels).properties(height=_chart_h),
+            use_container_width=True,
+        )
+
+        # Tabla abajo
+        st.markdown("#### Top 20 empresas con más errores")
+        st.dataframe(pivot, use_container_width=True, hide_index=True, height=_tbl_h)
 
     st.divider()
 
