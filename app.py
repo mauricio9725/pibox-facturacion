@@ -39,7 +39,7 @@ MENU_ICONS = {
 }
 MENU_BY_ROL = {
     "admin":       ["Prefactura Cliente", "Prefactura Interna", "Data", "Error Tracker", "Gestión de Usuarios", "Configuración"],
-    "operaciones": ["Prefactura Cliente", "Prefactura Interna", "Data", "Configuración"],
+    "operaciones": ["Prefactura Cliente", "Prefactura Interna", "Data", "Error Tracker", "Configuración"],
     "financiero":  ["Prefactura Cliente", "Prefactura Interna", "Data", "Error Tracker"],
     "cliente":     ["Prefactura Cliente", "Configuración"],
 }
