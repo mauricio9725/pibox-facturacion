@@ -1471,20 +1471,37 @@ def _page_error_tracker() -> None:
 
     st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
 
-    # ── Tabla pivot top 20 ───────────────────────────────────────
+    # ── Tabla pivot top 20 + gráfico top 10 ─────────────────────
     st.markdown("#### Top 20 empresas con más errores")
+
+    # Filtrar columnas según impacto en cierre
+    if filtro_cierre == "Solo afectan cierre":
+        _ctrl_visible = {k: v for k, v in ERROR_CONTROLS.items() if k in _AFECTAN_CIERRE}
+    elif filtro_cierre == "Solo no afectan cierre":
+        _ctrl_visible = {k: v for k, v in ERROR_CONTROLS.items() if k in _NO_AFECTAN}
+    else:
+        _ctrl_visible = ERROR_CONTROLS
+
     err_counts = {}
-    for ctrl, (_, label) in ERROR_CONTROLS.items():
+    for ctrl, (_, label) in _ctrl_visible.items():
         if ctrl in df.columns:
             grp = df[df[ctrl] != "Booking normal"].groupby("Nombre_Compania").size()
             err_counts[label] = grp
+
     if err_counts:
         pivot = pd.DataFrame(err_counts).fillna(0).astype(int)
         pivot["Total"] = pivot.sum(axis=1)
         pivot = pivot[pivot["Total"] > 0].sort_values("Total", ascending=False).head(20)
         pivot.index.name = "Empresa"
         pivot = pivot.reset_index()
-        st.dataframe(pivot, use_container_width=True, hide_index=True)
+
+        col_tbl, col_chart = st.columns([3, 2])
+        with col_tbl:
+            st.dataframe(pivot, use_container_width=True, hide_index=True)
+        with col_chart:
+            top10 = pivot.set_index("Empresa")[["Total"]].head(10).sort_values("Total")
+            st.markdown("**Top 10 por total de errores**")
+            st.bar_chart(top10, use_container_width=True)
 
     st.divider()
 
