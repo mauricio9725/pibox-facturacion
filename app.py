@@ -1414,13 +1414,30 @@ def _page_error_tracker() -> None:
         ciudades = sorted(df_raw["Ciudad"].dropna().unique().tolist())
         sel_ciudad = st.multiselect("📍 Ciudad", ciudades, placeholder="Todas las ciudades")
 
-    incluir_cero = st.toggle("Incluir bookings en cero (GMV = 0)", value=False)
+    _AFECTAN_CIERRE = {"CONTROL_300", "Control_balanceados_driver", "Control_balanceados_company", "Control_perdidas"}
+    _NO_AFECTAN     = {"CONTROL_CERO", "CONTROL_VALOR_ALTO", "CONTROL_VALOR_BAJO"}
+
+    col_t1, col_t2 = st.columns([2, 3])
+    with col_t1:
+        incluir_cero = st.toggle("Incluir bookings en cero (GMV = 0)", value=False)
+    with col_t2:
+        filtro_cierre = st.radio(
+            "🔒 Impacto en cierre",
+            ["Todos", "Solo afectan cierre", "Solo no afectan cierre"],
+            horizontal=True,
+        )
 
     df = df_raw.copy()
     if sel_mes:
         df = df[df["Fecha_VERDADERA"].astype(str).str[:7].isin(sel_mes)]
     if not incluir_cero and "CONTROL_CERO" in df.columns:
         df = df[df["CONTROL_CERO"] == "Booking normal"]
+    if filtro_cierre == "Solo afectan cierre":
+        cols_cierre = [c for c in _AFECTAN_CIERRE if c in df.columns]
+        df = df[df[cols_cierre].apply(lambda col: col != "Booking normal").any(axis=1)]
+    elif filtro_cierre == "Solo no afectan cierre":
+        cols_no = [c for c in _NO_AFECTAN if c in df.columns]
+        df = df[df[cols_no].apply(lambda col: col != "Booking normal").any(axis=1)]
     if sel_emp:
         df = df[df["Nombre_Compania"].isin(sel_emp)]
     if sel_ciudad:
