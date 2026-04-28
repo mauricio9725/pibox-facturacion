@@ -1471,7 +1471,7 @@ def _page_error_tracker() -> None:
 
     st.markdown("<div style='margin-top:1rem'></div>", unsafe_allow_html=True)
 
-    # ── Gráfico top 20 por empresa ───────────────────────────────
+    # ── Tabla pivot top 20 ───────────────────────────────────────
     st.markdown("#### Top 20 empresas con más errores")
     err_counts = {}
     for ctrl, (_, label) in ERROR_CONTROLS.items():
@@ -1479,10 +1479,12 @@ def _page_error_tracker() -> None:
             grp = df[df[ctrl] != "Booking normal"].groupby("Nombre_Compania").size()
             err_counts[label] = grp
     if err_counts:
-        chart_df = pd.DataFrame(err_counts).fillna(0).astype(int)
-        chart_df["Total"] = chart_df.sum(axis=1)
-        chart_df = chart_df[chart_df["Total"] > 0].sort_values("Total", ascending=False).head(20).drop(columns="Total")
-        st.bar_chart(chart_df, use_container_width=True)
+        pivot = pd.DataFrame(err_counts).fillna(0).astype(int)
+        pivot["Total"] = pivot.sum(axis=1)
+        pivot = pivot[pivot["Total"] > 0].sort_values("Total", ascending=False).head(20)
+        pivot.index.name = "Empresa"
+        pivot = pivot.reset_index()
+        st.dataframe(pivot, use_container_width=True, hide_index=True)
 
     st.divider()
 
