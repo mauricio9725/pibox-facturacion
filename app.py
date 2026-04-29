@@ -39,7 +39,7 @@ MENU_ICONS = {
 }
 MENU_BY_ROL = {
     "admin":       ["Prefactura Cliente", "Prefactura Interna", "Data", "Error Tracker", "Gestión de Usuarios", "Configuración"],
-    "operaciones": ["Prefactura Cliente", "Prefactura Interna", "Data", "Error Tracker", "Configuración"],
+    "operaciones": ["Error Tracker", "Configuración"],
     "financiero":  ["Prefactura Cliente", "Prefactura Interna", "Data", "Error Tracker"],
     "cliente":     ["Prefactura Cliente", "Configuración"],
 }
@@ -846,9 +846,9 @@ def _build_resumen(ws, df: pd.DataFrame, empresa: str, fi: date, ff: date, inclu
         return
 
     _anal = [
-        (11, "Pago a Pilotos",  "=SUM('Data Pilotos'!K:K)", '$#,##0.00', False),
+        (11, "Pago a Pilotos",  "=SUM('Data Pilotos'!M:M)", '$#,##0.00', False),
         (12, "Utilidad",        "=B9-B11",                  '$#,##0',    True),
-        (14, "Ganancia Corp",   "=SUM('Data Pilotos'!J:J)", '$#,##0.00', False),
+        (14, "Ganancia Corp",   "=SUM('Data Pilotos'!L:L)", '$#,##0.00', False),
         (15, "Dif",             "=B12-B14",                 '$#,##0',    True),
     ]
     for row_n, lbl, formula, num_fmt, is_total in _anal:
